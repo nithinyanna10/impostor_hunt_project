@@ -1,4 +1,3 @@
-# Feature extraction methods (e.g., embeddings, similarity, readability)
 import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
@@ -6,7 +5,7 @@ from sentence_transformers import SentenceTransformer
 import textstat
 import spacy
 
-# Load once globally
+# Load models globally
 model = SentenceTransformer('all-MiniLM-L6-v2')
 nlp = spacy.load('en_core_web_sm')
 
@@ -42,16 +41,24 @@ def extract_features(df):
         cos_sim = cosine_similarity([emb1], [emb2])[0][0]
 
         feats = {
-            "id": row["id"],
+            "id": row.get("id", -1),
             "cosine_similarity": cos_sim,
             "len_text_1": len(t1),
             "len_text_2": len(t2),
             "len_diff": abs(len(t1) - len(t2)),
         }
 
+        # BERT interaction features
+        feats.update({f"emb_diff_{i}": emb1[i] - emb2[i] for i in range(len(emb1))})
+        feats.update({f"emb_prod_{i}": emb1[i] * emb2[i] for i in range(len(emb1))})
+        feats.update({f"emb_concat_1_{i}": emb1[i] for i in range(len(emb1))})
+        feats.update({f"emb_concat_2_{i}": emb2[i] for i in range(len(emb2))})
+
+        # Readability
         feats.update({f"t1_{k}": v for k, v in extract_readability(t1).items()})
         feats.update({f"t2_{k}": v for k, v in extract_readability(t2).items()})
 
+        # Named Entity Counts
         feats.update({f"t1_{k}": v for k, v in count_named_entities(t1).items()})
         feats.update({f"t2_{k}": v for k, v in count_named_entities(t2).items()})
 
