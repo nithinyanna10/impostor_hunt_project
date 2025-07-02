@@ -47,34 +47,45 @@ def load_train_data(data_dir="data", verbose=False):
 
     return df_data
 
+
 import os
-import glob
+import pandas as pd
 
 def load_test_data(test_dir="../data/test", verbose=False):
     """
-    Loads the test data and returns a DataFrame with:
-    ['id', 'text_1', 'text_2'] where 'real' is a dummy label
+    Load test data from article folders that contain file_1.txt and file_2.txt.
+
+    Returns:
+        pd.DataFrame with columns ['id', 'text_1', 'text_2']
     """
-    article_paths = sorted(glob.glob(os.path.join(test_dir, "../data/test/*")))
     samples = []
 
-    for path in article_paths:
-        article_id = int(os.path.basename(path).split("_")[1])
-        try:
-            with open(os.path.join(path, "file_1.txt"), encoding='utf-8') as f1, \
-                 open(os.path.join(path, "file_2.txt"), encoding='utf-8') as f2:
-                text_1 = f1.read()
-                text_2 = f2.read()
-            samples.append({
-                "id": article_id,
-                "text_1": text_1,
-                "text_2": text_2,
-            })
-        except FileNotFoundError:
-            print(f"⚠️ Missing files in: {path}")
+    for folder in sorted(os.listdir(test_dir)):
+        folder_path = os.path.join(test_dir, folder)
+        if os.path.isdir(folder_path):
+            file1_path = os.path.join(folder_path, "file_1.txt")
+            file2_path = os.path.join(folder_path, "file_2.txt")
+
+            if os.path.exists(file1_path) and os.path.exists(file2_path):
+                try:
+                    with open(file1_path, encoding="utf-8") as f1, open(file2_path, encoding="utf-8") as f2:
+                        text_1 = f1.read()
+                        text_2 = f2.read()
+                    samples.append({
+                        "id": folder,
+                        "text_1": text_1,
+                        "text_2": text_2
+                    })
+                    if verbose:
+                        print(f"✅ Loaded {folder}")
+                except Exception as e:
+                    print(f"⚠️ Error reading {folder}: {e}")
+            else:
+                print(f"⚠️ Missing one or both files in {folder}")
 
     df = pd.DataFrame(samples)
     if verbose:
+        print(f"\n📊 Final test_df shape: {df.shape}")
         print(df.head())
 
     return df

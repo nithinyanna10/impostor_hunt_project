@@ -1,16 +1,33 @@
+
 import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 import textstat
 import spacy
+from transformers import GPT2LMHeadModel, GPT2TokenizerFast
+import torch
 
 # Load models globally
 model = SentenceTransformer('all-MiniLM-L6-v2')
 nlp = spacy.load('en_core_web_sm')
+gpt2_model = GPT2LMHeadModel.from_pretrained("gpt2")
+gpt2_tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
+gpt2_model.eval()
 
 def compute_embeddings(text):
     return model.encode([text])[0]
+
+def get_perplexity(text):
+    try:
+        encodings = gpt2_tokenizer(text, return_tensors='pt', truncation=True, max_length=512)
+        with torch.no_grad():
+            outputs = gpt2_model(**encodings, labels=encodings['input_ids'])
+        loss = outputs.loss
+        return torch.exp(loss).item()
+    except Exception as e:
+        print(f"⚠️ Perplexity error: {e}")
+        return -1.0
 
 def extract_readability(text):
     return {
@@ -34,9 +51,18 @@ def extract_features(df):
     for _, row in df.iterrows():
         t1 = row['text_1']
         t2 = row['text_2']
+
+        # Compute BERT embeddings
         emb1 = compute_embeddings(t1)
         emb2 = compute_embeddings(t2)
 
+        # Compute GPT-2 perplexity ONCE for each
+        perplexity_1 = get_perplexity(t1)
+        perplexity_2 = get_perplexity(t2)
+        perplexity_diff = abs(perplexity_1 - perplexity_2)
+        print(f"✅ ID {row.get('id', -1)} | P1: {perplexity_1:.2f} | P2: {perplexity_2:.2f} | Δ: {perplexity_diff:.2f}")
+
+        # Cosine sim
         cos_sim = cosine_similarity([emb1], [emb2])[0][0]
 
         feats = {
@@ -45,6 +71,9 @@ def extract_features(df):
             "len_text_1": len(t1),
             "len_text_2": len(t2),
             "len_diff": abs(len(t1) - len(t2)),
+            "perplexity_1": perplexity_1,
+            "perplexity_2": perplexity_2,
+            "perplexity_diff": perplexity_diff
         }
 
         # Embedding interactions
